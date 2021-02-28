@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 
 // data
 const ticker = ref("");
@@ -163,6 +163,23 @@ const tickers = ref([]);
 const graph = ref([]);
 
 // methods
+const subscibeToUpdates = (tickerName) => {
+  setInterval(async () => {
+    const request = await fetch(
+      `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=5461481e3aa6992b0103556872e20953879476edf2cd2cf9727677ac56eb564d`
+    );
+
+    const data = await request.json();
+
+    tickers.value.find((item) => item.name === tickerName).price =
+      data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+    
+    if (selected.value && selected.value.name === tickerName) {
+      graph.value.push(data.USD)
+    }
+  }, 5000);
+}
+
 const add = () => {
   if (ticker.value !== "") {
     const currentTicker = {
@@ -170,21 +187,9 @@ const add = () => {
       price: "-",
     };
     tickers.value.push(currentTicker);
+    localStorage.setItem('cryptonomicon-list', JSON.stringify(tickers.value))
 
-    setInterval(async () => {
-      const request = await fetch(
-        `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=5461481e3aa6992b0103556872e20953879476edf2cd2cf9727677ac56eb564d`
-      );
-
-      const data = await request.json();
-
-      tickers.value.find((item) => item.name === currentTicker.name).price =
-        data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-      
-      if (selected.value && selected.value.name === currentTicker.name) {
-        graph.value.push(data.USD)
-      }
-    }, 5000);
+    subscibeToUpdates(currentTicker.name)
 
     ticker.value = "";
   }
@@ -210,6 +215,17 @@ const normalizeGraph = () => {
     5 + ((price - minValue) * 95) / (maxValue - minValue)
   );
 };
+
+onMounted(() => {
+  const tickersData = localStorage.getItem('cryptonomicon-list')
+
+  if (tickersData) {
+    tickers.value = JSON.parse(tickersData)
+    tickers.value.forEach(ticker => {
+      subscibeToUpdates(ticker.name)
+    })
+  }
+})
 
 </script>
 
