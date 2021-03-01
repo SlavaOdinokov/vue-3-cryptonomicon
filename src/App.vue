@@ -40,7 +40,9 @@
                 CHD
               </span>
             </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div v-if="errors.length" class="text-sm text-red-600">
+              {{ errors[0] }}
+            </div>
           </div>
         </div>
         <button
@@ -184,6 +186,7 @@ const ticker = ref("");
 const selected = ref(null);
 const tickers = ref([]);
 const graph = ref([]);
+const errors = ref([]);
 // data pagination
 const currentPage = ref(1);
 // data filter
@@ -191,6 +194,10 @@ const filter = ref("");
 const hasNextPage = ref(true);
 
 // watch
+watch(ticker, () => {
+  errors.value = [];
+});
+
 watch(filter, () => {
   currentPage.value = 1;
   const { pathname } = window.location;
@@ -247,12 +254,21 @@ const add = () => {
       name: ticker.value,
       price: "-",
     };
-    tickers.value.push(currentTicker);
-    filter.value = "";
-    localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
 
-    subscibeToUpdates(currentTicker.name);
-    ticker.value = "";
+    const hasTicker = tickers.value.some(
+      (ticker) => ticker.name === currentTicker.name
+    );
+
+    if (hasTicker) {
+      errors.value.push("Такой тикер уже добавлен");
+    } else {
+      tickers.value.push(currentTicker);
+      filter.value = "";
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
+
+      subscibeToUpdates(currentTicker.name);
+      ticker.value = "";
+    }
   }
 };
 
@@ -266,6 +282,7 @@ const handleDelete = (ticker) => {
     selected.value = null;
   }
   tickers.value = tickers.value.filter((item) => item !== ticker);
+  localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
 };
 
 const normalizeGraph = () => {
@@ -278,7 +295,14 @@ const normalizeGraph = () => {
 };
 
 // hooks
-onMounted(() => {
+onMounted(async () => {
+  const request = await fetch(
+    "https://min-api.cryptocompare.com/data/all/coinlist?summary=true&api_key=5461481e3aa6992b0103556872e20953879476edf2cd2cf9727677ac56eb564d"
+  );
+
+  const data = await request.json();
+  console.log(data.Data);
+
   const windowData = Object.fromEntries(
     new URL(window.location).searchParams.entries()
   );
@@ -289,7 +313,7 @@ onMounted(() => {
   }
 
   if (windowData.page) {
-    currentPage.value = windowData.page;
+    currentPage.value = +windowData.page;
   }
 
   if (tickersData) {
