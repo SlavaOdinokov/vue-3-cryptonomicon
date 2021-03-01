@@ -96,7 +96,7 @@
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="(t, i) in filteredTickers()"
+            v-for="(t, i) in paginatedTickers"
             :key="i"
             @click="select(t)"
             :class="{ 'border-4': selected === t }"
@@ -140,7 +140,7 @@
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, idx) in normalizeGraph()"
+            v-for="(bar, idx) in normalizedGraph"
             :key="idx"
             class="bg-purple-800 border w-10"
             :style="{ height: `${bar}%` }"
@@ -179,7 +179,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 
 // data
 const ticker = ref("");
@@ -191,46 +191,75 @@ const errors = ref([]);
 const currentPage = ref(1);
 // data filter
 const filter = ref("");
-const hasNextPage = ref(true);
+
+// computed
+const hasNextPage = computed(() => filteredTickers.value.length > endIndex.value);
+const startIndex = computed(() => (currentPage.value - 1) * 6);
+const endIndex = computed(() => currentPage.value * 6);
+
+const filteredTickers = computed(() => {
+  return tickers.value.filter((ticker) =>
+    ticker.name.includes(filter.value)
+  );
+});
+
+const paginatedTickers = computed(() => {
+  return filteredTickers.value.slice(startIndex.value, endIndex.value)
+});
+
+const normalizedGraph = computed(() => {
+  const maxValue = Math.max(...graph.value);
+  const minValue = Math.min(...graph.value);
+
+  if (minValue === maxValue) {
+    return graph.value.map(() => 50)
+  }
+
+  return graph.value.map(
+    (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+  );
+});
+
+const pageStateOptions = computed(() => {
+  return {
+    filter: filter.value,
+    currentPage: currentPage.value
+  }
+});
 
 // watch
+watch(tickers, () => {
+  localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
+});
+
+watch(selected, () => {
+  graph.value = [];
+});
+
 watch(ticker, () => {
   errors.value = [];
 });
 
 watch(filter, () => {
   currentPage.value = 1;
+});
+
+watch(pageStateOptions, (val) => {
   const { pathname } = window.location;
   history.pushState(
     null,
     document.title,
-    `${pathname}?filter=${filter.value}&page=${currentPage.value}`
+    `${pathname}?filter=${val.filter}&page=${val.currentPage}`
   );
 });
 
-watch(currentPage, () => {
-  const { pathname } = window.location;
-  history.pushState(
-    null,
-    document.title,
-    `${pathname}?filter=${filter.value}&page=${currentPage.value}`
-  );
+watch(paginatedTickers, () => {
+  if (paginatedTickers.value.length === 0 && currentPage.value > 1) {
+    currentPage.value -= 1;
+  }
 });
 
 // methods
-const filteredTickers = () => {
-  const start = (currentPage.value - 1) * 6;
-  const end = currentPage.value * 6;
-
-  const filteredTickers = tickers.value.filter((ticker) =>
-    ticker.name.includes(filter.value)
-  );
-
-  hasNextPage.value = filteredTickers.length > end;
-
-  return filteredTickers.slice(start, end);
-};
-
 const subscibeToUpdates = (tickerName) => {
   setInterval(async () => {
     const request = await fetch(
@@ -239,6 +268,7 @@ const subscibeToUpdates = (tickerName) => {
 
     const data = await request.json();
 
+    // errors?
     tickers.value.find((item) => item.name === tickerName).price =
       data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
@@ -262,9 +292,8 @@ const add = () => {
     if (hasTicker) {
       errors.value.push("Такой тикер уже добавлен");
     } else {
-      tickers.value.push(currentTicker);
+      tickers.value = [...tickers.value, currentTicker];
       filter.value = "";
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
 
       subscibeToUpdates(currentTicker.name);
       ticker.value = "";
@@ -274,7 +303,6 @@ const add = () => {
 
 const select = (ticker) => {
   selected.value = ticker;
-  graph.value = [];
 };
 
 const handleDelete = (ticker) => {
@@ -282,16 +310,6 @@ const handleDelete = (ticker) => {
     selected.value = null;
   }
   tickers.value = tickers.value.filter((item) => item !== ticker);
-  localStorage.setItem("cryptonomicon-list", JSON.stringify(tickers.value));
-};
-
-const normalizeGraph = () => {
-  const maxValue = Math.max(...graph.value);
-  const minValue = Math.min(...graph.value);
-
-  return graph.value.map(
-    (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-  );
 };
 
 // hooks
