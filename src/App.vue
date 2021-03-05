@@ -107,7 +107,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(+t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -178,8 +178,24 @@
   </div>
 </template>
 
+// [x] 6. Наличие в состоянии ЗАВИСИМЫХ ДАННЫХ | Критичность: 5+
+// [ ] 4. Запросы напрямую внутри компонента (???) | Критичность: 5
+// [ ] 2. При удалении остается подписка на загрузку тикера | Критичность: 5
+// [ ] 5. Обработка ошибок API | Критичность: 5
+// [ ] 3. Количество запросов | Критичность: 4
+// [x] 8. При удалении тикера не изменяется localStorage | Критичность: 4
+// [x] 1. Одинаковый код в watch | Критичность: 3
+// [ ] 9. localStorage и анонимные вкладки | Критичность: 3
+// [ ] 7. График ужасно выглядит если будет много цен | Критичность: 2
+// [ ] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
+
+// Параллельно
+// [x] График сломан если везде одинаковые значения
+// [x] При удалении тикера остается выбор
+
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
+import { loadAllTickers, subscribeToTicker, unsubscribeFromTicker } from './api';
 
 // data
 const ticker = ref("");
@@ -260,22 +276,32 @@ watch(paginatedTickers, () => {
 });
 
 // methods
-const subscibeToUpdates = (tickerName) => {
-  setInterval(async () => {
-    const request = await fetch(
-      `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=5461481e3aa6992b0103556872e20953879476edf2cd2cf9727677ac56eb564d`
-    );
+const formatPrice = (price) => {
+  if (price === '-') {
+    return price;
+  }
+  return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+};
 
-    const data = await request.json();
+const updateTicker = (tickerName, price) => {
+  tickers.value.filter(t => t.name === tickerName).forEach(t => t.price = price);
+};
 
-    // errors?
-    tickers.value.find((item) => item.name === tickerName).price =
-      data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+const updateTickers = async () => {
+  // if (!tickers.value.length) {
+  //   return;
+  // }
 
-    if (selected.value && selected.value.name === tickerName) {
-      graph.value.push(data.USD);
-    }
-  }, 5000);
+  // const data = await loadTickers(tickers.value.map(t => t.name));
+
+  // tickers.value.forEach(ticker => {
+  //   const price = data[ticker.name.toUpperCase()];
+  //   ticker.price = price ?? '-';
+  // })
+
+  // if (selected.value && selected.value.name === tickerName) {
+  //   graph.value.push(data.USD);
+  // }
 };
 
 const add = () => {
@@ -294,9 +320,8 @@ const add = () => {
     } else {
       tickers.value = [...tickers.value, currentTicker];
       filter.value = "";
-
-      subscibeToUpdates(currentTicker.name);
       ticker.value = "";
+      subscribeToTicker(currentTicker.name, (newPrice) => updateTicker(currentTicker.name, newPrice));
     }
   }
 };
@@ -310,15 +335,12 @@ const handleDelete = (ticker) => {
     selected.value = null;
   }
   tickers.value = tickers.value.filter((item) => item !== ticker);
+  unsubscribeFromTicker(ticker.name);
 };
 
 // hooks
 onMounted(async () => {
-  const request = await fetch(
-    "https://min-api.cryptocompare.com/data/all/coinlist?summary=true&api_key=5461481e3aa6992b0103556872e20953879476edf2cd2cf9727677ac56eb564d"
-  );
-
-  const data = await request.json();
+  const data = await loadAllTickers();
   console.log(data.Data);
 
   const windowData = Object.fromEntries(
@@ -336,10 +358,12 @@ onMounted(async () => {
 
   if (tickersData) {
     tickers.value = JSON.parse(tickersData);
-    tickers.value.forEach((ticker) => {
-      subscibeToUpdates(ticker.name);
+    tickers.value.forEach(t => {
+      subscribeToTicker(t.name, (newPrice) => updateTicker(t.name, newPrice));
     });
   }
+
+  setInterval(updateTickers, 5000);
 });
 </script>
 
