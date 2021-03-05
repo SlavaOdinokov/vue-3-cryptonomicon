@@ -284,10 +284,15 @@ const formatPrice = (price) => {
 };
 
 const updateTicker = (tickerName, price) => {
-  tickers.value.filter(t => t.name === tickerName).forEach(t => t.price = price);
+  tickers.value.filter(t => t.name === tickerName).forEach(t => {
+    if (selected.value && selected.value === t) {
+      graph.value.push(price);
+    }
+    t.price = price
+  });
 };
 
-const updateTickers = async () => {
+// const updateTickers = async () => {
   // if (!tickers.value.length) {
   //   return;
   // }
@@ -302,7 +307,7 @@ const updateTickers = async () => {
   // if (selected.value && selected.value.name === tickerName) {
   //   graph.value.push(data.USD);
   // }
-};
+// };
 
 const add = () => {
   if (ticker.value !== "") {
@@ -363,7 +368,7 @@ onMounted(async () => {
     });
   }
 
-  setInterval(updateTickers, 5000);
+  // setInterval(updateTickers, 5000);
 });
 </script>
 
