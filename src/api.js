@@ -58,7 +58,9 @@ export const unsubscribeFromTicker = (ticker) => {
 export const loadAllTickers = () =>
   fetch(
     `${BASE_URL}all/coinlist?summary=true&api_key=${API_KEY}`
-  ).then((response) => response.json());
+  )
+    .then((response) => response.json())
+    .then((rawData) => Object.entries(rawData.Data).map(i => i[0]) );
   
 
 // const loadTickers = () => {

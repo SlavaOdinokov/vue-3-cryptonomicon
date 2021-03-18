@@ -11,6 +11,7 @@
               <input
                 v-model="ticker"
                 @keydown.enter="add"
+                @input="search"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -18,26 +19,14 @@
                 placeholder="Например DOGE"
               />
             </div>
-            <div class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
+            <div v-if="inputLines.length" class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
               <span
+                v-for="(str, idx) in inputLines"
+                :key="idx"
+                @click="addStr(str)"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
               >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
+                {{ str }}
               </span>
             </div>
             <div v-if="errors.length" class="text-sm text-red-600">
@@ -207,6 +196,9 @@ const errors = ref([]);
 const currentPage = ref(1);
 // data filter
 const filter = ref("");
+//
+const allSymbols = ref([]);
+const inputLines = ref([]);
 
 // computed
 const hasNextPage = computed(() => filteredTickers.value.length > endIndex.value);
@@ -309,10 +301,26 @@ const updateTicker = (tickerName, price) => {
   // }
 // };
 
+const search = () => {
+  if (ticker.value !== '') {
+    const arr = allSymbols.value.filter(s => {
+      return (s + '').indexOf(ticker.value.toUpperCase()) != -1;
+    });
+    inputLines.value = arr.sort((a, b) => a.localeCompare(b)).slice(0, 4);
+  } else {
+    inputLines.value = [];
+  }
+};
+
+const addStr = (str) => {
+  ticker.value = str;
+  add();
+};
+
 const add = () => {
   if (ticker.value !== "") {
     const currentTicker = {
-      name: ticker.value,
+      name: ticker.value.toUpperCase(),
       price: "-",
     };
 
@@ -326,6 +334,7 @@ const add = () => {
       tickers.value = [...tickers.value, currentTicker];
       filter.value = "";
       ticker.value = "";
+      inputLines.value = [];
       subscribeToTicker(currentTicker.name, (newPrice) => updateTicker(currentTicker.name, newPrice));
     }
   }
@@ -345,9 +354,7 @@ const handleDelete = (ticker) => {
 
 // hooks
 onMounted(async () => {
-  const data = await loadAllTickers();
-  console.log(data.Data);
-
+  allSymbols.value = await loadAllTickers();
   const windowData = Object.fromEntries(
     new URL(window.location).searchParams.entries()
   );
