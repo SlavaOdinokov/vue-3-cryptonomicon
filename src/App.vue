@@ -127,12 +127,15 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selected.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div 
+          ref="graphTemplate"
+          class="flex items-end border-gray-600 border-b border-l h-64"
+        >
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
-            class="bg-purple-800 border w-10"
-            :style="{ height: `${bar}%` }"
+            class="bg-purple-800 border"
+            :style="{ height: `${bar}%`, width: `${widthOneElementGraph}px` }"
           ></div>
         </div>
         <button
@@ -168,14 +171,14 @@
 </template>
 
 // [x] 6. Наличие в состоянии ЗАВИСИМЫХ ДАННЫХ | Критичность: 5+
-// [ ] 4. Запросы напрямую внутри компонента (???) | Критичность: 5
-// [ ] 2. При удалении остается подписка на загрузку тикера | Критичность: 5
-// [ ] 5. Обработка ошибок API | Критичность: 5
-// [ ] 3. Количество запросов | Критичность: 4
+// [x] 4. Запросы напрямую внутри компонента (???) | Критичность: 5
+// [x] 2. При удалении остается подписка на загрузку тикера | Критичность: 5
+// [H] 5. Обработка ошибок API | Критичность: 5
+// [x] 3. Количество запросов | Критичность: 4
 // [x] 8. При удалении тикера не изменяется localStorage | Критичность: 4
 // [x] 1. Одинаковый код в watch | Критичность: 3
 // [ ] 9. localStorage и анонимные вкладки | Критичность: 3
-// [ ] 7. График ужасно выглядит если будет много цен | Критичность: 2
+// [x] 7. График ужасно выглядит если будет много цен | Критичность: 2
 // [ ] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
 
 // Параллельно
@@ -183,22 +186,26 @@
 // [x] При удалении тикера остается выбор
 
 <script setup>
-import { ref, onMounted, watch, computed } from "vue";
+import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from "vue";
 import { loadAllTickers, subscribeToTicker, unsubscribeFromTicker } from './api';
 
 // data
 const ticker = ref("");
 const selected = ref(null);
 const tickers = ref([]);
-const graph = ref([]);
 const errors = ref([]);
 // data pagination
 const currentPage = ref(1);
 // data filter
 const filter = ref("");
-//
+// data autocomplete
 const allSymbols = ref([]);
 const inputLines = ref([]);
+// data graph
+const graph = ref([]);
+const maxGraphElements = ref(0);
+const graphTemplate = ref(null); // $ref
+const widthOneElementGraph = 20;
 
 // computed
 const hasNextPage = computed(() => filteredTickers.value.length > endIndex.value);
@@ -242,6 +249,9 @@ watch(tickers, () => {
 
 watch(selected, () => {
   graph.value = [];
+  nextTick(() => {
+    calculateMaxGraphElements();
+  });
 });
 
 watch(ticker, () => {
@@ -268,6 +278,15 @@ watch(paginatedTickers, () => {
 });
 
 // methods
+const calculateMaxGraphElements = () => {
+  if (!graphTemplate.value) {
+    return;
+  }
+
+  // console.log(graphTemplate.value.clientWidth);
+  maxGraphElements.value = graphTemplate.value.clientWidth / widthOneElementGraph;
+};
+
 const formatPrice = (price) => {
   if (price === '-') {
     return price;
@@ -279,6 +298,14 @@ const updateTicker = (tickerName, price) => {
   tickers.value.filter(t => t.name === tickerName).forEach(t => {
     if (selected.value && selected.value === t) {
       graph.value.push(price);
+
+      // if (maxGraphElements.value === 0) {
+      //   maxGraphElements.value = graphTemplate.value.clientWidth / widthOneElementGraph;
+      // }
+
+      while (graph.value.length > maxGraphElements.value) {
+        graph.value.shift();
+      }
     }
     t.price = price
   });
@@ -376,6 +403,13 @@ onMounted(async () => {
   }
 
   // setInterval(updateTickers, 5000);
+
+  // подписываемся на изменение ширины экрана для корректного отображения графика
+  window.addEventListener('resize', calculateMaxGraphElements);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', calculateMaxGraphElements);
 });
 </script>
 
